@@ -19,29 +19,11 @@ class printbatch(callbacks.Callback):
         print(logs)
 
 
-
-
 # the x train data is criterias
 # the y train data is the correct value of error
 # we try to predict error
 
-# we have to read file by parts
-
-#def loadData:
-	#with open("log.txt") as infile:
-	#    for line in infile:
-	 #       do_something_with(line)
-
-	#	x = np.array([[1, 2, 3], [4, 5, 6]], np.int32)
-	#>>> type(x)
-	#<type 'numpy.ndarray'>
-	#>>> x.shape
-	#(2, 3)
-	#>>> x.dtype
-	#dtype('int32')
-
-inputVectorLength = 100 # Это тоже лучше читать из файла. Хотя для удобства подгоним размер, уж для обучения-то..
-temperature = 300-77 # Количество температур, для которых ведётся расчёт
+inputVectorLength = 100 # Это тоже лучше читать из файла.
 batch_size=32 # Размер обрабатываемой за один раз выборки
 
 # По входным данным предлагают вот что:
@@ -50,16 +32,46 @@ batch_size=32 # Размер обрабатываемой за один раз �
 # температура идёт третьим измерением (т.к. такой тензор получаем)
 #
 #        3 - три столбца
-#        ______
-#       /| I  CBRatio Thickness
-#      / | B1 Us1     Uy1
-#     /  | ....................
-#    /T  | Bn Usn     Uyn
+#        ______________________
+#       /| I  CBRatio Thickness|
+#      / | B1 Us1     Uy1      |
+#     /  | ....................|
+#    /T  | Bn Usn     Uyn      |
+
+# Я тут смотрю на это - и не понимаю, зачем такая сложность?
+# Можно же просто сделать вот так?
+
+#    ________________________
+#    | T  T        T        |
+#    | I  CBRation Thickness|
+#    | B1 Us1     Uy1       |
+#    | .....................|
+#    | Bn Usn     Uyn       |
+#    ________________________
+
+# v1
+# Да и в целом - а надо ли мне иметь двумерную структуру?
+# Данные сами-по себе может и зависят, но если будет вектор - то всё равно ж сеть разберётся что к чему....
+# А мне на выходе только числа нужны...
+#   _______________________________________________________       ______________________
+#   |T I CBRation Thickness B1 .. Bn Us1 .. Usn Uy1 .. Uyn|  ---> |n1 mu1 n2 mu2 n3 mu3|
+#   _______________________________________________________       ______________________ 
 
 
-loadedData = np.zeros([batch_size,temperature,inputVectorLength,3])
+# v2
+#  ___________________________________         ___________________________
+#  |Критерий1 Критерий2 ... КритерийN|  --->   |Относительная погрешность|
+#
 
-resData = np.zeros([batch_size,temperature,3,3])
+# v3
+#                               ______________________
+#  |Спектр подвижности|   --->  |n1 mu1 n2 mu2 n3 mu3|
+#                               ______________________
+#
+
+loadedData = np.zeros([batch_size,inputVectorLength])
+
+resData = np.zeros([batch_size,6])
 #test = np.zeros([batch_size,temperature,inputVectorLength,3])
 
 for b in range(0,batch_size):
@@ -111,15 +123,16 @@ def myGenerator():
     while 1:
         yield (X_train, y_train)
 
+
+
 model = Sequential()
 
-model.add(Dense(units=8, input_shape=(temperature,inputVectorLength, 3)))
-
-model.add(Dense(units=8))
-
-model.add(Dense(units=8))
-
-model.add(Dense(units=3))
+model.add(Dense(units=4096, input_shape=(inputVectorLength)))
+model.add(Dense(units=1024))
+model.add(Dense(units=256))
+model.add(Dense(units=64))
+model.add(Dense(units=16))
+model.add(Dense(units=6))
 #model.add(Activation('relu'))
 #model.add(Activation('softmax'))
 

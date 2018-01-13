@@ -1,5 +1,6 @@
 import h5py
 from pwn import *
+from random import *
 
 DATA_PATH = "./DataSet/"
 Random_Crop = 100
@@ -40,112 +41,110 @@ scale = 2
 Надо будет только уточнить у Димы эти моменты.
 
 
+
+# v1
+# Да и в целом - а надо ли мне иметь двумерную структуру?
+# Данные сами-по себе может и зависят, но если будет вектор - то всё равно ж сеть разберётся что к чему....
+# А мне на выходе только числа нужны...
+#   _______________________________________________________       ______________________
+#   |T I CBRation Thickness B1 .. Bn Us1 .. Usn Uy1 .. Uyn|  ---> |n1 mu1 n2 mu2 n3 mu3|
+#   _______________________________________________________       ______________________ 
+
+
+# v2
+#  ___________________________________         ___________________________
+#  |Критерий1 Критерий2 ... КритерийN|  --->   |Относительная погрешность|
+#
+
+# v3
+#                               ______________________
+#  |Спектр подвижности|   --->  |n1 mu1 n2 mu2 n3 mu3|
+#                               ______________________
+#
+
 """
 
 
-def prepare_training_data():
+def prepare_training_data(quantity):
     print("prepare_training_data")
-    names = os.listdir(DATA_PATH)
-    names = sorted(names)
-    nums = names.__len__()
-    data = numpy.zeros((nums * Random_Crop, 1, Patch_size, Patch_size), dtype=numpy.double)
-    label = numpy.zeros((nums * Random_Crop, 1, label_size, label_size), dtype=numpy.double)
-    for i in range(nums):
-        name = DATA_PATH + names[i]
-        hr_img = cv2.imread(name, cv2.IMREAD_COLOR)
-        shape = hr_img.shape
-        hr_img = cv2.cvtColor(hr_img, cv2.COLOR_BGR2YCrCb)
-        hr_img = hr_img[:, :, 0]
-        # produce Random_Crop random coordinate to crop training img
-        if(min(shape[0], shape[1]) - label_size < 0):
-            continue
-        Points_x = numpy.random.randint(0, min(shape[0], shape[1]) - label_size, Random_Crop)
-        Points_y = numpy.random.randint(0, min(shape[0], shape[1]) - label_size, Random_Crop)
-        for j in range(Random_Crop):
-            hr_patch = hr_img[Points_x[j]: Points_x[j] + label_size, Points_y[j]: Points_y[j] + label_size]
-            lr_patch = cv2.resize(hr_patch, (label_size / scale, label_size / scale), cv2.INTER_CUBIC)
-            lr_patch = lr_patch.astype(float) / 255.
-            hr_patch = hr_patch.astype(float) / 255.
-            data[i * Random_Crop + j, 0, :, :] = lr_patch
-            label[i * Random_Crop + j, 0, :, :] = hr_patch
-            # cv2.imshow("lr", lr_patch)
-            # cv2.imshow("hr", hr_patch)
-            # cv2.waitKey(0)
-    return data, label
+
+    inputVectorLength = 4096
+    
+    loadedData = np.zeros([quantity,inputVectorLength])
+
+    resData = np.zeros([quantity,6])
+    
+    for b in range(0,quantity):
+        t= randint(77, 300)
+        # ./main T kNoise current sampleLength sampleWidth sampleThickness eHeavyHoleConcentration molarCadmium electronMobility
+        # ./main 77 1 10e-3 30e-3 10e-3 1e-5 1e22 0.21
+        # Так как параметры зависят от отношения длины образца к его ширине, то ширину можно не менять, а менять только длину.
+
+        # Нужно рандомизировать
+
+        kNoise = randint(0,5)
+        sampleLength = 30e-3+uniform(0,50e-3)
+        sampleWidth = sampleLength/uniform(0,5)
+        sampleThickness = 1e-5+uniform(0,5e-5)
+        eHeavyHoleConcentration = 1e22+uniform(-5e21,5e21)
+        molarCadmium = 0.21+uniform(-0.1,0.3)
+        electronMobility = 5+uniform(-4,4)
+
+
+        proc=subprocess.run(["./MCTConsole", str(t), str(kNoise), str(sampleLength), str(sampleWidth), str(sampleThickness), str(eHeavyHoleConcentration),str(molarCadmium), str(electronMobility)], stdout=subprocess.PIPE)
+        outs, errs = proc.communicate()
+
+        # let's suppose that MCTConsole saves output data into "input.txt" (I, Cbration, Thickness, B, Us,Uy) and "output.txt" (mu1 n1, mu2 n2, mu3 n3)
+        inDataFile = open("input.txt",'r')
+        temp = inDataFile.read()
+        for i in range(0,len(temp)):
+            loadedData[b,i]=t.split(" ") # or \t - we should check this
+
+        outDataFile = open("output.txt",'r')
+        temp = outDataFile.read()
+        for i in range(0,len(temp)):
+            resData[b,i]=t.split(" ") # or \t - we should check this
+    
+    return loadedData, resData
 
 def write_hdf5(data, labels, output_filename):
     print("write_hdf5")
     """
     This function is used to save image data and its label(s) to hdf5 file.
-    output_file.h5,contain data and label
+    output_file contains data and label
     """
-
     x = data.astype(numpy.float32)
     y = labels.astype(numpy.float32)
 
     with h5py.File(output_filename, 'w') as h:
         h.create_dataset('data', data=x, shape=x.shape)
         h.create_dataset('label', data=y, shape=y.shape)
-        # h.create_dataset()
 
-if __name__ == "__main__":
-	data, label = prepare_training_data()
+
+def gen_data():
+    # Насчёт количества
+    # (301-77)*(5)*((5-2)/0.1)*50*1000*10*10
+    # Полное покрытие будет 160 800 000 000 штук
+
+    # Допустим я софрмирую 1 000 000 000 образцов для обучения и
+    # 10 000 000 для validation set
+    # 1 000 000 - для контрольной выборки
+
+    print("generating train_set")
+    data, label = prepare_training_data(1000000000)
     # data - input
     # label - output
-    write_hdf5(data, label, "little_train.h5")
+    write_hdf5(data, label, "train_set.h5")
 
+    print("generating validation_set")
+    data, label = prepare_training_data(10000000)
+    write_hdf5(data, label, "validation_set.h5")
 
-    inputVectorLength = 100 # Это тоже лучше читать из файла. Хотя для удобства подгоним размер, уж для обучения-то..
-    temperature = 300-77 # Количество температур, для которых ведётся расчёт
-    batch_size=32 # Размер обрабатываемой за один раз выборки
+    print("generating check_set")
+    data, label = prepare_training_data(1000000)
+    write_hdf5(data, label, "check_set.h5")
 
-    # По входным данным предлагают вот что:
-    # первой строкой сила тока, отношение длины к ширине, толщина
-    # далее - магнитная индукция, напряжение магнитносопротивления, напряжение холла
-    # температура идёт третьим измерением (т.к. такой тензор получаем)
-    #
-    #        3 - три столбца
-    #        ______
-    #       /| I  CBRatio Thickness
-    #      / | B1 Us1     Uy1
-    #     /  | ....................
-    #    /T  | Bn Usn     Uyn
+if __name__ == "__main__":
+    gen_data()
 
-
-    loadedData = np.zeros([batch_size,temperature,inputVectorLength,3])
-
-    resData = np.zeros([batch_size,temperature,3,3])
-    #test = np.zeros([batch_size,temperature,inputVectorLength,3])
-
-    for b in range(0,batch_size):
-        for t in range(77,301):
-            # ./main T kNoise current sampleLength sampleWidth sampleThickness eHeavyHoleConcentration
-            # ./main 77 1 10e-3 30e-3 10e-3 1e-5 1e22 0.21
-            # Так как параметры зависят от отношения длины образца к его ширине, то ширину можно не менять, а менять только длину.
-
-            proc=subprocess.run(["./MCTConsole", str(t), str(1), str(sampleLength), str(sampleWidth), str(sampleThickness, str(eHeavyHoleConcentration))], stdout=subprocess.PIPE)
-            outs, errs = proc.communicate()
-
-            # let's suppose that MCTConsike saves output data into "input.txt" (I, Cbration, Thickness, B, Us,Uy) and "output.txt" (mu1 n1, mu2 n2, mu3 n3)
-            inDataFile = open("input.txt",'r')
-            temp = inDataFile.read()
-            temp = temp.split('\n')
-            # here the temp[n] is "0.5 43.3234 2.34545"
-            for i in range(0,len(temp)):
-                loadedData[b,t-77,i]=t.split(" ") # or \t - we should check this
-
-            outDataFile = open("output.txt",'r')
-            temp = outDataFile.read()
-            temp = temp.split('\n')
-
-            for i in range(0,len(temp)):
-                resData[b,t-77,i]=t.split(" ") # or \t - we should check this
-
-
-            
-
-
-    temp = np.array([[0.0,0.5,1,1.5,2.0],[0.0,0.5,1,1.5,2.0],[0.0,0.5,1,1.5,2.0]])
-    test[0][0]=temp.transpose()
-
-    print(test.shape)
+    
