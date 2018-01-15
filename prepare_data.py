@@ -1,6 +1,9 @@
+# -*- coding: UTF-8 -*-
+
 import h5py
-from pwn import *
+import subprocess
 from random import *
+import numpy as np
 
 DATA_PATH = "./DataSet/"
 Random_Crop = 100
@@ -68,7 +71,7 @@ scale = 2
 def prepare_training_data(quantity):
     print("prepare_training_data")
 
-    inputVectorLength = 4096
+    inputVectorLength = 6005
     
     loadedData = np.zeros([quantity,inputVectorLength])
 
@@ -76,6 +79,7 @@ def prepare_training_data(quantity):
     
     for b in range(0,quantity):
         t= randint(77, 300)
+        print(b)
         # ./main T kNoise current sampleLength sampleWidth sampleThickness eHeavyHoleConcentration molarCadmium electronMobility
         # ./main 77 1 10e-3 30e-3 10e-3 1e-5 1e22 0.21
         # Так как параметры зависят от отношения длины образца к его ширине, то ширину можно не менять, а менять только длину.
@@ -83,27 +87,38 @@ def prepare_training_data(quantity):
         # Нужно рандомизировать
 
         kNoise = randint(0,5)
+        current = 10e-3+uniform(0,10e-3)
         sampleLength = 30e-3+uniform(0,50e-3)
         sampleWidth = sampleLength/uniform(0,5)
         sampleThickness = 1e-5+uniform(0,5e-5)
         eHeavyHoleConcentration = 1e22+uniform(-5e21,5e21)
         molarCadmium = 0.21+uniform(-0.1,0.3)
-        electronMobility = 5+uniform(-4,4)
+        AFactor = 5+uniform(0,3)
+        KFactor = 1.3+uniform(0,0.2)
+        
 
+        proc=subprocess.run(["./MCTConsole", str(t), str(current), str(kNoise), str(sampleLength), str(sampleWidth), str(sampleThickness), str(eHeavyHoleConcentration),str(molarCadmium), str(AFactor), str(KFactor)], stdout=subprocess.PIPE)
+        outs, err= proc.stdout, proc.stderr
 
-        proc=subprocess.run(["./MCTConsole", str(t), str(kNoise), str(sampleLength), str(sampleWidth), str(sampleThickness), str(eHeavyHoleConcentration),str(molarCadmium), str(electronMobility)], stdout=subprocess.PIPE)
-        outs, errs = proc.communicate()
+        outs = outs.decode("UTF-8")
+
+        outs= outs.split("\n")
+
+        #print(outs)
 
         # let's suppose that MCTConsole saves output data into "input.txt" (I, Cbration, Thickness, B, Us,Uy) and "output.txt" (mu1 n1, mu2 n2, mu3 n3)
-        inDataFile = open("input.txt",'r')
-        temp = inDataFile.read()
+        #inDataFile = open("input.txt",'r')
+        temp = outs[0].split("\t") #inDataFile.read()
+        #print(len(temp))
         for i in range(0,len(temp)):
-            loadedData[b,i]=t.split(" ") # or \t - we should check this
+            if temp[i]:
+                loadedData[b,i]=float(temp[i])
 
-        outDataFile = open("output.txt",'r')
-        temp = outDataFile.read()
+        #outDataFile = open("output.txt",'r')
+        temp = outs[1].split("\t") #outDataFile.read()
         for i in range(0,len(temp)):
-            resData[b,i]=t.split(" ") # or \t - we should check this
+            if temp[i]:
+                resData[b,i]=float(temp[i])
     
     return loadedData, resData
 
@@ -146,5 +161,8 @@ def gen_data():
 
 if __name__ == "__main__":
     gen_data()
+    #data, label = prepare_training_data(10)
+    #print(label)
+
 
     
