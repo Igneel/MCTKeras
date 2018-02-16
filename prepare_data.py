@@ -73,9 +73,9 @@ def prepare_training_data(quantity):
 
     inputVectorLength = 6005
     
-    loadedData = np.zeros([quantity,inputVectorLength])
+    loadedData = np.ones([quantity,inputVectorLength])
 
-    resData = np.zeros([quantity,6])
+    resData = np.ones([quantity,3])
     
     for b in range(0,quantity):
         t= randint(77, 300)
@@ -104,11 +104,13 @@ def prepare_training_data(quantity):
 
         outs= outs.split("\n")
 
-        #print(outs)
+        for o in outs:
+            print(o.split("\t")[:-1])
 
         # let's suppose that MCTConsole saves output data into "input.txt" (I, Cbration, Thickness, B, Us,Uy) and "output.txt" (mu1 n1, mu2 n2, mu3 n3)
         #inDataFile = open("input.txt",'r')
-        temp = outs[0].split("\t") #inDataFile.read()
+        temp = outs[1].split("\t") #inDataFile.read()
+        #print(temp)
         #print(len(temp))
         for i in range(0,len(temp)):
             if temp[i]:
@@ -116,9 +118,14 @@ def prepare_training_data(quantity):
 
         #outDataFile = open("output.txt",'r')
         temp = outs[1].split("\t") #outDataFile.read()
-        for i in range(0,len(temp)):
+        j=0
+        for i in range(0,len(temp),2):
             if temp[i]:
-                resData[b,i]=float(temp[i])
+                resData[b,j]=float(temp[i])
+                j=j+1
+
+        if np.nan in loadedData[b,:] or np.nan in resData[b,:]:
+            b=b-1
     
     return loadedData, resData
 
@@ -128,8 +135,8 @@ def write_hdf5(data, labels, output_filename):
     This function is used to save image data and its label(s) to hdf5 file.
     output_file contains data and label
     """
-    x = data.astype(numpy.float32)
-    y = labels.astype(numpy.float32)
+    x = data.astype(np.float32)
+    y = labels.astype(np.float32)
 
     with h5py.File(output_filename, 'w') as h:
         h.create_dataset('data', data=x, shape=x.shape)
@@ -145,23 +152,30 @@ def gen_data():
     # 10 000 000 для validation set
     # 1 000 000 - для контрольной выборки
 
-    print("generating train_set")
-    data, label = prepare_training_data(1000000000)
+    #print("generating train_set")
+    #data, label = prepare_training_data(100000)
     # data - input
     # label - output
-    write_hdf5(data, label, "train_set.h5")
-
-    print("generating validation_set")
-    data, label = prepare_training_data(10000000)
+    #write_hdf5(data, label, "train_set.h5")
+    data=[]
+    label=[]
+    print("generating short validation_set")
+    data, label = prepare_training_data(100000)
     write_hdf5(data, label, "validation_set.h5")
-
+    data=[]
+    label=[]
     print("generating check_set")
-    data, label = prepare_training_data(1000000)
+    data, label = prepare_training_data(100000)
     write_hdf5(data, label, "check_set.h5")
 
 if __name__ == "__main__":
-    gen_data()
-    #data, label = prepare_training_data(10)
+    #gen_data()
+    data, label = prepare_training_data(3)
+    print(data)
+    print(label)
+    #write_hdf5(data,label,"dev_train_set.h5")
+    #data, label = prepare_training_data(1000)
+    #write_hdf5(data,label,"tiny_val_set.h5")
     #print(label)
 
 
