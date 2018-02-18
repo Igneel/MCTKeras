@@ -83,6 +83,35 @@ def parseCriteria(outs):
     outs=list(map(lambda o: list(map(lambda o2: float(o2),o)),outs))
     #print(outs)
 
+    outs[2][4]=-1*outs[2][4]
+    outs[2][5]=-1*outs[2][5]
+
+    loadedData=outs[0]
+
+    #print(outs[1])
+
+    #print(outs[2])
+
+    # относительная погрешность:
+    # (значение-истинное значение)/истинное значение * 100%
+    # outs[1] - экспериментальные значения
+    # outs[2] - истинные значения
+
+    resData = outs[1]
+
+    for i in range(0, len(outs[1])):
+        err = (resData[i]-outs[2][i])/outs[2][i]*100
+        if err<100:
+            resData[i]=err
+        else:
+            resData[i]=100
+
+    #print(loadedData)
+
+    #print(resData)
+
+    return loadedData, resData
+
 def parseMobSpec(outs):
     outs= outs.split("\n")[1:]
     outs=list(map(lambda o: o.split("\t")[:-1], outs))
@@ -92,6 +121,12 @@ def parseMobSpec(outs):
     loadedData=outs[0]
     resData = outs[2]
 
+    #print(outs[0][0])
+    #print(outs[0][-1])
+
+    #print(outs[1])
+    #print(outs[2])
+
     return loadedData,resData
 
 
@@ -99,7 +134,7 @@ def parseMobSpec(outs):
 def prepare_training_data(quantity):
     print("prepare_training_data")
 
-    inputVectorLength = 49980
+    inputVectorLength = 116 #49980 #49980 # 49980
     
     loadedData = np.ones([quantity,inputVectorLength])
 
@@ -123,11 +158,21 @@ def prepare_training_data(quantity):
         molarCadmium = 0.21+uniform(-0.1,0.3)
         AFactor = 5+uniform(0,3)
         KFactor = 1.3+uniform(0,0.2)
-        
-        #77 1 10e-3 30e-3 10e-3 1e-5 1e22 0.21 5 1.3
-        #proc=subprocess.run(["./MCTConsole", str(77), str(0),str(10e-3), str(30e-3), str(10e-3), str(1e-5), str(1e22),str(0.21), str(5), str(1.3)], stdout=subprocess.PIPE)
 
-        proc=subprocess.run(["./MCTConsole", str(t), str(kNoise),str(current), str(sampleLength), str(sampleWidth), str(sampleThickness), str(eHeavyHoleConcentration),str(molarCadmium), str(AFactor), str(KFactor)], stdout=subprocess.PIPE)
+        eSamplingFRes=100
+        eBandWidthFRes=10
+        eAttenuationFRes=20
+        eLengthFilterRes=50
+
+        eSamplingFHall=100
+        eBandWidthFHall=10
+        eAttenuationFHall=20
+        eLengthFilterHall=50
+        
+        #77 1 10e-3 30e-3 10e-3 1e-5 1e22 0.21 5 1.3 100 10 20 50 100 10 20 50
+        #proc=subprocess.run(["./MCTConsole", str(77), str(0),str(10e-3), str(30e-3), str(10e-3), str(1e-5), str(1e22),str(0.21), str(5), str(1.3), str(100), str(10), str(20), str(50), str(100), str(10), str(20), str(50)], stdout=subprocess.PIPE)
+
+        proc=subprocess.run(["./MCTConsole", str(t), str(kNoise),str(current), str(sampleLength), str(sampleWidth), str(sampleThickness), str(eHeavyHoleConcentration),str(molarCadmium), str(AFactor), str(KFactor), str(eSamplingFRes), str(eBandWidthFRes), str(eAttenuationFRes), str(eLengthFilterRes), str(eSamplingFHall), str(eBandWidthFHall), str(eAttenuationFHall), str(eLengthFilterHall)], stdout=subprocess.PIPE)
         outs, err= proc.stdout, proc.stderr
 
         outs = outs.decode("UTF-8")
@@ -138,7 +183,11 @@ def prepare_training_data(quantity):
         #resCriteria = parseCriteria(outs[1])
         #resMobSpec = parseMobSpec(outs[2])
 
-        loadedData[b,:], resData[b,:] = parseMobSpec(outs[2])
+        #loadedData[b,:], resData[b,:] = parseTensor(outs[0])
+
+        loadedData[b,:], resData[b,:] = parseCriteria(outs[1])
+
+        #loadedData[b,:], resData[b,:] = parseMobSpec(outs[2])
 
         if np.nan in loadedData[b,:] or np.nan in resData[b,:]:
             b=b-1
@@ -186,10 +235,19 @@ def gen_data():
 
 if __name__ == "__main__":
     #gen_data()
-    data, label = prepare_training_data(50)
+    data, label = prepare_training_data(2000)
+    write_hdf5(data,label,"tiny_Criteria_train_set.h5")
+    data=[]
+    label=[]
+    data, label = prepare_training_data(20000)
+    write_hdf5(data,label,"short_Criteria_train_set.h5")
+    data=[]
+    label=[]
+    data, label = prepare_training_data(200000)
+    write_hdf5(data,label,"medium_Criteria_train_set.h5")
     #print(data)
     #print(label)
-    write_hdf5(data,label,"dev_MobSpec_train_set.h5")
+    
     #data, label = prepare_training_data(1000)
     #write_hdf5(data,label,"tiny_val_set.h5")
     #print(label)
